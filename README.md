@@ -6,7 +6,7 @@ Its a fun project!
 
 ## Showcase
 
-![showcase](./showcase.mov)
+See [here](./showcase.mp4) (enable sound).
 
 ## Installation
 
