@@ -207,7 +207,7 @@ class Task:
 
 async def main() -> None:
     while True:
-        task = Task(input("> "))
+        task = Task(input("> ").strip())
         await asyncio.gather(
             task.run(),
             task.play_audio()
