@@ -7,6 +7,7 @@ from difflib import SequenceMatcher
 from typing import List, Union
 from urllib.parse import quote
 
+import colorama
 import httpx
 
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
@@ -14,6 +15,7 @@ import pygame
 from bs4 import BeautifulSoup
 
 
+colorama.init(autoreset=True)
 pygame.mixer.init()
 
 client = httpx.AsyncClient(follow_redirects=True)
@@ -39,7 +41,7 @@ class Task:
         while not self.download_finished or len(self.audio_files_to_play) > 0:
             if len(self.audio_files_to_play) > 0:
                 f = self.audio_files_to_play.pop(0)
-                print(f"Playing {repr(f)}...")
+                print(f"{colorama.Fore.BLUE}Playing {repr(f)}...")
                 pygame.mixer.music.load(f)
                 pygame.mixer.music.play()
                 while pygame.mixer.music.get_busy():
@@ -47,7 +49,7 @@ class Task:
             else:
                 await asyncio.sleep(0.1)
         self.playing_finished = True
-        print("Finished playing audio files.")
+        print(f"{colorama.Fore.YELLOW}Finished playing audio files.")
 
     async def run(self) -> None:
         # Download all files
@@ -57,12 +59,12 @@ class Task:
                 self.audio_files_to_play.append(audio_file)
                 self.audio_files.append(audio_file)
                 if len(self.audio_files_to_play) > 1:
-                    print("Waiting for audio files to be played...")
+                    print(f"{colorama.Fore.GREEN}Waiting for audio files to be played...")
                     await asyncio.sleep(1)
             except AudioNotFound:
-                print(f"Audio for {repr(term)} not found. Skipping...")
+                print(f"{colorama.Style.BRIGHT}{colorama.Fore.RED}Audio for {repr(term)} not found. Skipping...")
         self.download_finished = True
-        print("Finished downloading audio files.")
+        print(f"{colorama.Fore.YELLOW}Finished downloading audio files.")
 
         # TODO: Optional: Merge all files into one using ffmpeg
 
@@ -71,11 +73,11 @@ class Task:
             await asyncio.sleep(0.1)
         for f in self.audio_files:
             os.remove(f)
-        print("Finished deleting audio files.")
+        print(f"{colorama.Fore.YELLOW}Finished deleting audio files.")
     
     async def request(self, term: str) -> str:
         # Search for the term
-        print(f"Searching for {repr(term)}...")
+        print(f"{colorama.Fore.GREEN}Searching for {repr(term)}...")
         r = await client.get(f"https://de.forvo.com/searchs-ajax-load.php?term={quote(term)}")
         r.raise_for_status()
         j = r.json()
@@ -91,7 +93,7 @@ class Task:
             if similarity > best_similarity:
                 best_similarity = similarity
                 best_entry = word
-        print(f"Best match: {repr(best_entry)}")
+        print(f"{colorama.Fore.GREEN}Best match: {repr(best_entry)}")
 
         # Get audio urls
         r = await client.get(f"https://de.forvo.com/word/{quote(best_entry)}")
@@ -122,7 +124,7 @@ class Task:
 
         # Download audio
         audio_url = random.choice(audio_urls)
-        print(f"Downloading {repr(audio_url)}...")
+        print(f"{colorama.Fore.GREEN}Downloading {repr(audio_url)}...")
         r = await client.get(audio_url)
         r.raise_for_status()
         
