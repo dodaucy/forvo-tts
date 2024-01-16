@@ -2,6 +2,9 @@ import asyncio
 import base64
 import os
 import random
+import string
+import subprocess
+import sys
 import tempfile
 from difflib import SequenceMatcher
 from typing import List, Union
@@ -18,13 +21,47 @@ from bs4 import BeautifulSoup
 # How many audio files should be buffered before pausing the download?
 BUFFER_SIZE = 2
 
+
 colorama.init(autoreset=True)
 pygame.mixer.init()
+
 
 client = httpx.AsyncClient(follow_redirects=True)
 client.headers["User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64; rv:89.0) Gecko/20100101 Firefox/89.0"
 
-preffered_language = input("Preffered language (English, German, ...): ").lower()
+
+match input("Store output audio files [SOME FILES MAY BE CORRUPTED]? (y/N): ").lower().strip():
+    case "y":
+        store_files = True
+
+        # Check if ffmpeg is installed
+        try:
+            subprocess.run(
+                ["ffmpeg", "-version"],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+        except FileNotFoundError:
+            print("ffmpeg must be installed to use this feature. Exiting...")
+            sys.exit(1)
+
+        # Create output directory if it doesn't exist
+        if not os.path.exists("output"):
+            os.mkdir("output")
+
+    case "n":
+        store_files = False
+
+    case "":
+        store_files = False
+
+    case _:
+        print("Invalid input. Exiting...")
+        sys.exit(1)
+
+preffered_language = input("Preffered language (English, German, ...): ").lower().strip()
+
 print("Don't use punctuation like commas, dots or question marks.")
 
 
@@ -36,7 +73,7 @@ class Task:
     def __init__(self, sentence: str) -> None:
         self.download_finished = False
         self.playing_finished = False
-        self.terms = sentence.split(" ")
+        self.sentence = sentence
         self.audio_files_to_play: List[str] = []
         self.audio_files: List[str] = []
 
@@ -56,7 +93,7 @@ class Task:
 
     async def run(self) -> None:
         # Download all files
-        for term in self.terms:
+        for term in self.sentence.split(" "):
             try:
                 audio_file = await self.request(term)
                 self.audio_files_to_play.append(audio_file)
@@ -69,7 +106,35 @@ class Task:
         self.download_finished = True
         print(f"{colorama.Fore.YELLOW}Finished downloading audio files.")
 
-        # TODO: Optional: Merge all files into one using ffmpeg
+        # Merge all files
+        if store_files:
+            print(f"{colorama.Fore.MAGENTA}Merging audio files...")
+            if len(self.audio_files) == 0:
+                print(f"{colorama.Style.BRIGHT}{colorama.Fore.MAGENTA}No audio files to merge.")
+                return
+            safe_sentence = ""
+            for c in self.sentence:
+                if c in string.ascii_letters + string.digits + " ":
+                    safe_sentence += c
+            output_file = os.path.join(
+                "output",
+                f"{safe_sentence.replace(' ', '_')}.mp3"
+            )
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-y",
+                    "-i",
+                    f"concat:{'|'.join(self.audio_files)}",
+                    "-c",
+                    "copy",
+                    output_file
+                ],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+            print(f"{colorama.Fore.YELLOW}Finished merging audio files.")
 
         # Delete all files
         while not self.playing_finished:
