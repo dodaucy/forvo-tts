@@ -137,11 +137,11 @@ class Task:
             print(f"{colorama.Style.BRIGHT}{colorama.Fore.MAGENTA}Finished merging audio files.")
 
         # Delete all files
-        while not self.playing_finished:
-            await asyncio.sleep(0.1)
-        for f in self.audio_files:
-            os.remove(f)
-        print(f"{colorama.Style.BRIGHT}{colorama.Fore.CYAN}Finished deleting audio files.")
+        # ! while not self.playing_finished:
+        # !     await asyncio.sleep(0.1)
+        # ! for f in self.audio_files:
+        # !     os.remove(f)
+        # ! print(f"{colorama.Style.BRIGHT}{colorama.Fore.CYAN}Finished deleting audio files.")
 
     async def request(self, term: str) -> str:
         # Search for the term
