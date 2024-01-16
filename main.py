@@ -15,6 +15,9 @@ import pygame
 from bs4 import BeautifulSoup
 
 
+# How many audio files should be buffered before pausing the download?
+BUFFER_SIZE = 2
+
 colorama.init(autoreset=True)
 pygame.mixer.init()
 
@@ -58,7 +61,7 @@ class Task:
                 audio_file = await self.request(term)
                 self.audio_files_to_play.append(audio_file)
                 self.audio_files.append(audio_file)
-                if len(self.audio_files_to_play) > 1:
+                if len(self.audio_files_to_play) > BUFFER_SIZE:
                     print(f"{colorama.Fore.GREEN}Waiting for audio files to be played...")
                     await asyncio.sleep(1)
             except AudioNotFound:
