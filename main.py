@@ -4,7 +4,7 @@ import os
 import random
 import tempfile
 from difflib import SequenceMatcher
-from typing import Union
+from typing import List, Union
 from urllib.parse import quote
 
 import httpx
@@ -23,75 +23,123 @@ preffered_language = input("Preffered language (English, German, ...): ").lower(
 print("Don't use punctuation like commas, dots or question marks.")
 
 
-async def search(term: str) -> bytes:
-    # Search for the term
-    print(f"Searching for {repr(term)}...")
-    r = await client.get(f"https://de.forvo.com/searchs-ajax-load.php?term={quote(term)}")
-    r.raise_for_status()
-    j = r.json()
-    assert isinstance(j, list)
-    assert len(j) > 0
+class AudioNotFound(Exception):
+    pass
 
-    # Find the best match
-    best_entry: Union[None, str] = None
-    best_similarity = 0
-    for word in j:
-        similarity = SequenceMatcher(None, word, term).ratio()
-        if similarity > best_similarity:
-            best_similarity = similarity
-            best_entry = word
-    print(f"Best match: {repr(best_entry)}")
-    assert best_entry is not None
 
-    # Get audio urls
-    r = await client.get(f"https://de.forvo.com/word/{quote(best_entry)}")
-    r.raise_for_status()
-    soup = BeautifulSoup(r.text, "html.parser")
-    preffered_audio_urls = []
-    bad_audio_urls = []
-    for div in soup.find_all("div", {"class": "play"}):
-        args_str = div["onclick"].split("(")[1].split(")")[0]
-        args = [arg.strip("'") for arg in args_str.split(",")]
-        if len(args) != 9:
-            continue
-        a, b, c, d, e, f, g, h, i = args
-        if h == best_entry:
-            if e:
-                audio_url = f"https://audio12.forvo.com/audios/mp3/{base64.b64decode(e).decode()}"
+class Task:
+    def __init__(self, sentence: str) -> None:
+        self.download_finished = False
+        self.playing_finished = False
+        self.terms = sentence.split(" ")
+        self.audio_files_to_play: List[str] = []
+        self.audio_files: List[str] = []
+
+    async def play_audio(self) -> None:
+        while not self.download_finished or len(self.audio_files_to_play) > 0:
+            if len(self.audio_files_to_play) > 0:
+                f = self.audio_files_to_play.pop(0)
+                print(f"Playing {repr(f)}...")
+                pygame.mixer.music.load(f)
+                pygame.mixer.music.play()
+                while pygame.mixer.music.get_busy():
+                    await asyncio.sleep(0.1)
             else:
-                audio_url = f"https://audio12.forvo.com/mp3/{base64.b64decode(b).decode()}"
-            if i.lower() == preffered_language:
-                preffered_audio_urls.append(audio_url)
-            else:
-                bad_audio_urls.append(audio_url)
-    if len(preffered_audio_urls) > 0:
-        audio_urls = preffered_audio_urls
-    else:
-        audio_urls = bad_audio_urls
-    assert len(audio_urls) > 0
+                await asyncio.sleep(0.1)
+        self.playing_finished = True
+        print("Finished playing audio files.")
 
-    # Download audio
-    audio_url = random.choice(audio_urls)
-    print(f"Playing {repr(best_entry)} ({repr(audio_url)})...")
-    r = await client.get(audio_url)
-    r.raise_for_status()
-    return r.content
+    async def run(self) -> None:
+        # Download all files
+        for term in self.terms:
+            try:
+                audio_file = await self.request(term)
+                self.audio_files_to_play.append(audio_file)
+                self.audio_files.append(audio_file)
+                if len(self.audio_files_to_play) > 1:
+                    print("Waiting for audio files to be played...")
+                    await asyncio.sleep(1)
+            except AudioNotFound:
+                print(f"Audio for {repr(term)} not found. Skipping...")
+        self.download_finished = True
+        print("Finished downloading audio files.")
 
+        # TODO: Optional: Merge all files into one using ffmpeg
 
-async def play(term: str) -> None:
-    with tempfile.NamedTemporaryFile(suffix=".mp3") as f:
-        f.write(await search(term))
-        f.flush()
-        pygame.mixer.music.load(f.name)
-        pygame.mixer.music.play()
-        while pygame.mixer.music.get_busy():
+        # Delete all files
+        while not self.playing_finished:
             await asyncio.sleep(0.1)
+        for f in self.audio_files:
+            os.remove(f)
+        print("Finished deleting audio files.")
+    
+    async def request(self, term: str) -> str:
+        # Search for the term
+        print(f"Searching for {repr(term)}...")
+        r = await client.get(f"https://de.forvo.com/searchs-ajax-load.php?term={quote(term)}")
+        r.raise_for_status()
+        j = r.json()
+        assert isinstance(j, list)
+        if len(j) == 0:
+            raise AudioNotFound
+
+        # Find the best match
+        best_entry: Union[None, str] = None
+        best_similarity = -1
+        for word in j:
+            similarity = SequenceMatcher(None, word, term).ratio()
+            if similarity > best_similarity:
+                best_similarity = similarity
+                best_entry = word
+        print(f"Best match: {repr(best_entry)}")
+
+        # Get audio urls
+        r = await client.get(f"https://de.forvo.com/word/{quote(best_entry)}")
+        r.raise_for_status()
+        soup = BeautifulSoup(r.text, "html.parser")
+        preffered_audio_urls = []
+        bad_audio_urls = []
+        for div in soup.find_all("div", {"class": "play"}):
+            args_str = div["onclick"].split("(")[1].split(")")[0]
+            args = [arg.strip("'") for arg in args_str.split(",")]
+            if len(args) != 9:
+                continue
+            a, b, c, d, e, f, g, h, i = args  # Names from JS
+            if h == best_entry:
+                if e:
+                    audio_url = f"https://audio12.forvo.com/audios/mp3/{base64.b64decode(e).decode()}"
+                else:
+                    audio_url = f"https://audio12.forvo.com/mp3/{base64.b64decode(b).decode()}"
+                if i.lower() == preffered_language:
+                    preffered_audio_urls.append(audio_url)
+                else:
+                    bad_audio_urls.append(audio_url)
+        if len(preffered_audio_urls) > 0:
+            audio_urls = preffered_audio_urls
+        else:
+            audio_urls = bad_audio_urls
+        assert len(audio_urls) > 0
+
+        # Download audio
+        audio_url = random.choice(audio_urls)
+        print(f"Downloading {repr(audio_url)}...")
+        r = await client.get(audio_url)
+        r.raise_for_status()
+        
+        # Save audio as file
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=".mp3", delete=False) as f:
+            f.write(r.content)
+            f.flush()
+            return f.name
 
 
 async def main() -> None:
     while True:
-        for term in input("> ").split(" "):
-            await play(term)
+        task = Task(input("> "))
+        await asyncio.gather(
+            task.run(),
+            task.play_audio()
+        )
 
 
 asyncio.run(main())
