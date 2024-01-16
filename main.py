@@ -77,7 +77,7 @@ class Task:
         for f in self.audio_files:
             os.remove(f)
         print(f"{colorama.Fore.YELLOW}Finished deleting audio files.")
-    
+
     async def request(self, term: str) -> str:
         # Search for the term
         print(f"{colorama.Fore.GREEN}Searching for {repr(term)}...")
@@ -130,7 +130,7 @@ class Task:
         print(f"{colorama.Fore.GREEN}Downloading {repr(audio_url)}...")
         r = await client.get(audio_url)
         r.raise_for_status()
-        
+
         # Save audio as file
         with tempfile.NamedTemporaryFile(mode="wb", suffix=".mp3", delete=False) as f:
             f.write(r.content)
