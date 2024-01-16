@@ -89,7 +89,7 @@ class Task:
             else:
                 await asyncio.sleep(0.1)
         self.playing_finished = True
-        print(f"{colorama.Fore.YELLOW}Finished playing audio files.")
+        print(f"{colorama.Style.BRIGHT}{colorama.Fore.BLUE}Finished playing audio files.")
 
     async def run(self) -> None:
         # Download all files
@@ -104,7 +104,7 @@ class Task:
             except AudioNotFound:
                 print(f"{colorama.Style.BRIGHT}{colorama.Fore.RED}Audio for {repr(term)} not found. Skipping...")
         self.download_finished = True
-        print(f"{colorama.Fore.YELLOW}Finished downloading audio files.")
+        print(f"{colorama.Style.BRIGHT}{colorama.Fore.GREEN}Finished downloading audio files.")
 
         # Merge all files
         if store_files:
@@ -134,14 +134,14 @@ class Task:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL
             )
-            print(f"{colorama.Fore.YELLOW}Finished merging audio files.")
+            print(f"{colorama.Style.BRIGHT}{colorama.Fore.MAGENTA}Finished merging audio files.")
 
         # Delete all files
         while not self.playing_finished:
             await asyncio.sleep(0.1)
         for f in self.audio_files:
             os.remove(f)
-        print(f"{colorama.Fore.YELLOW}Finished deleting audio files.")
+        print(f"{colorama.Style.BRIGHT}{colorama.Fore.CYAN}Finished deleting audio files.")
 
     async def request(self, term: str) -> str:
         # Search for the term
