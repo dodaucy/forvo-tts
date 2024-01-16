@@ -154,13 +154,14 @@ class Task:
             raise AudioNotFound
 
         # Find the best match
-        best_entry: Union[None, str] = None
-        best_similarity = -1
-        for word in j:
-            similarity = SequenceMatcher(None, word, term).ratio()
-            if similarity > best_similarity:
-                best_similarity = similarity
-                best_entry = word
+        # ! best_entry: Union[None, str] = None
+        # ! best_similarity = -1
+        # ! for word in j:
+        # !     similarity = SequenceMatcher(None, word, term).ratio()
+        # !     if similarity > best_similarity:
+        # !         best_similarity = similarity
+        # !         best_entry = word
+        best_entry = j[0]
         print(f"{colorama.Fore.GREEN}Best match: {repr(best_entry)}")
 
         # Get audio urls
@@ -175,7 +176,7 @@ class Task:
             if len(args) != 9:
                 continue
             a, b, c, d, e, f, g, h, i = args  # Names from JS
-            if h == best_entry:
+            if h.replace("\\", "") == best_entry:
                 if e:
                     audio_url = f"https://audio12.forvo.com/audios/mp3/{base64.b64decode(e).decode()}"
                 else:
@@ -188,7 +189,8 @@ class Task:
             audio_urls = preffered_audio_urls
         else:
             audio_urls = bad_audio_urls
-        assert len(audio_urls) > 0
+        if len(audio_urls) == 0:
+            raise AudioNotFound
 
         # Download audio
         audio_url = random.choice(audio_urls)
